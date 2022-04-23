@@ -24,23 +24,9 @@ double SERVO5DIFF;
 
 void getDataFromPC();
 void replyToPC();
-void moveServos();
 void parseData();
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-
-uint16_t newServo0Pos = SERVO0MAX;
-uint16_t servo0Pos = SERVO0MIN-1;
-uint16_t newServo1Pos = SERVO1MAX;
-uint16_t servo1Pos = SERVO1MIN-1;
-uint16_t newServo2Pos = SERVO2MAX;
-uint16_t servo2Pos = SERVO2MIN-1;
-uint16_t newServo3Pos = SERVO3MAX;
-uint16_t servo3Pos = SERVO3MIN-1;
-uint16_t newServo4Pos = SERVO4MAX;
-uint16_t servo4Pos = SERVO4MIN-1;
-uint16_t newServo5Pos = SERVO5MAX;
-uint16_t servo5Pos = SERVO5MIN-1;
 
 const byte buffSize = 40;
 char inputBuffer[buffSize];
@@ -64,7 +50,7 @@ void setup() {
   SERVO3DIFF=(SERVO3MAX - SERVO3MIN);
   SERVO4DIFF=(SERVO4MAX - SERVO5MIN);
   SERVO5DIFF=(SERVO5MAX - SERVO5MIN);
-  Serial.begin(9600);
+  Serial.begin(57600);
   Serial.println("8 channel Servo test!");
 
   pwm.begin();
@@ -88,10 +74,13 @@ void setup() {
   pwm.setPWMFreq(SERVO_FREQ);  // Analog servos run at ~50 Hz updates
 
   delay(10);
-    // initialize the servo
-  moveServos();
-  
-    // tell the PC we are ready
+  pwm.setPWM(0, 0, SERVO0MAX);
+  pwm.setPWM(2, 0, SERVO1MAX);
+  pwm.setPWM(4, 0, SERVO2MAX);
+  pwm.setPWM(6, 0, SERVO3MAX);
+  pwm.setPWM(8, 0, SERVO4MAX);
+  pwm.setPWM(10, 0, SERVO5MAX);
+  // tell the PC we are ready
   Serial.println("<Arduino is ready>");
 }
 
@@ -99,7 +88,6 @@ void loop() {
   curMillis = millis();
   getDataFromPC();
   replyToPC();
-  moveServos();
 }
 
 //=============
@@ -143,54 +131,59 @@ void parseData() {
   char * strtokIndx; // this is used by strtok() as an index
   
   strtokIndx = strtok(inputBuffer,",");      // get the first part - the string
-  newServo0Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo0Pos = atoi(strtokIndx);     // convert this part to an int
   newServo0Pos = (((newServo0Pos) * SERVO0DIFF) / (270)) + SERVO0MIN;
   if(newServo0Pos<SERVO0MIN){
     newServo0Pos=SERVO0MIN;
   } else if(newServo0Pos>SERVO0MAX){
     newServo0Pos=SERVO0MAX;
   }
+  pwm.setPWM(0, 0, newServo0Pos);
   strtokIndx = strtok(NULL,",");      // get the first part - the string
-  newServo1Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo1Pos = atoi(strtokIndx);     // convert this part to an int
   newServo1Pos = (((newServo1Pos) * SERVO1DIFF) / (270)) + SERVO1MIN;
   if(newServo1Pos<SERVO1MIN){
     newServo1Pos=SERVO1MIN;
   } else if(newServo1Pos>SERVO1MAX){
     newServo1Pos=SERVO1MAX;
   }
+  pwm.setPWM(2, 0, newServo1Pos);
   strtokIndx = strtok(NULL,",");      // get the first part - the string
-  newServo2Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo2Pos = atoi(strtokIndx);     // convert this part to an int
   newServo2Pos = (((newServo2Pos) * SERVO2DIFF) / (270)) + SERVO2MIN;
   if(newServo2Pos<SERVO2MIN){
     newServo2Pos=SERVO2MIN;
   } else if(newServo2Pos>SERVO2MAX){
     newServo2Pos=SERVO2MAX;
   }
+  pwm.setPWM(4, 0, newServo2Pos);
   strtokIndx = strtok(NULL,",");      // get the first part - the string
-  newServo3Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo3Pos = atoi(strtokIndx);     // convert this part to an int
   newServo3Pos = (((newServo3Pos) * SERVO3DIFF) / (270)) + SERVO3MIN;
   if(newServo3Pos<SERVO3MIN){
     newServo3Pos=SERVO3MIN;
   } else if(newServo3Pos>SERVO3MAX){
     newServo3Pos=SERVO3MAX;
   }
+  pwm.setPWM(6, 0, newServo3Pos);
   strtokIndx = strtok(NULL,",");      // get the first part - the string
-  newServo4Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo4Pos = atoi(strtokIndx);     // convert this part to an int
   newServo4Pos = (((newServo4Pos) * SERVO4DIFF) / (270)) + SERVO4MIN;
   if(newServo4Pos<SERVO4MIN){
     newServo4Pos=SERVO4MIN;
   } else if(newServo4Pos>SERVO4MAX){
     newServo4Pos=SERVO4MAX;
   }
+  pwm.setPWM(8, 0, newServo4Pos);
   strtokIndx = strtok(NULL,",");      // get the first part - the string
-  newServo5Pos = atoi(strtokIndx);     // convert this part to an int
+  uint16_t newServo5Pos = atoi(strtokIndx);     // convert this part to an int
   newServo5Pos = (((newServo5Pos) * SERVO5DIFF) / (270)) + SERVO5MIN;
   if(newServo5Pos<SERVO5MIN){
     newServo5Pos=SERVO5MIN;
   } else if(newServo5Pos>SERVO5MAX){
     newServo5Pos=SERVO5MAX;
   }
-
+  pwm.setPWM(10, 0, newServo5Pos);
 }
 
 //=============
@@ -202,34 +195,5 @@ void replyToPC() {
     Serial.print("<Time ");
     Serial.print(millis()-curMillis);
     Serial.println(">");
-  }
-}
-
-//=============
-
-void moveServos() {
-  if (servo0Pos != newServo0Pos) {
-    servo0Pos = newServo0Pos;
-    pwm.setPWM(0, 0, newServo0Pos);
-  }
-  if (servo1Pos != newServo1Pos) {
-    servo1Pos = newServo1Pos;
-    pwm.setPWM(2, 0, newServo1Pos);
-  }
-  if (servo2Pos != newServo2Pos) {
-    servo2Pos = newServo2Pos;
-    pwm.setPWM(4, 0, newServo2Pos);
-  }
-  if (servo3Pos != newServo3Pos) {
-    servo3Pos = newServo3Pos;
-    pwm.setPWM(6, 0, newServo3Pos);
-  }
-  if (servo4Pos != newServo4Pos) {
-    servo4Pos = newServo4Pos;
-    pwm.setPWM(8, 0, newServo4Pos);
-  }
-  if (servo5Pos != newServo5Pos) {
-    servo5Pos = newServo5Pos;
-    pwm.setPWM(10, 0, newServo5Pos);
   }
 }
