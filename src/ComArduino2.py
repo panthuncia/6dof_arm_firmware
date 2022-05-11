@@ -135,7 +135,7 @@ def runTest(td):
 
             print("===========")
 
-        #time.sleep()
+        # time.sleep()
 
 
 # ======================================
@@ -152,7 +152,7 @@ print("")
 
 # NOTE the user must ensure that the serial port and baudrate are correct
 serPort = "COM12"
-baudRate = 9600
+baudRate = 57600
 ser = serial.Serial(serPort, baudRate)
 print("Serial port " + serPort + " opened  Baudrate " + str(baudRate))
 
@@ -162,11 +162,20 @@ endMarker = 62
 waitForArduino()
 
 print("Finished waiting")
-testData = "<270,270,270,270,270,270>"
-testData1 = "<180,180,180,180,180,180>"
-testData = "<270,180,180,180,180,180>"
-testData = "<0,0,0,0,0,0>"
-testData1 = "<70,70,70,70,70,70>"
-runTest(testData1)
+testData1 = "<270,270,270,270,270,270>"
+testData2 = "<180,180,180,180,180,180>"
+testData3 = "<70,70,70,70,70,70>"
+testData4 = "<0,0,0,0,0,0>"
+n = 1;
+while True:
+    if n == 1:
+        runTest(testData1)
+    if n == 2:
+        runTest(testData2)
+    if n == 3:
+        runTest(testData3)
+    if n == 4:
+        runTest(testData4)
+    n += 1
 
 ser.close
