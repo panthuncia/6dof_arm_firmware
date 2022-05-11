@@ -1,8 +1,12 @@
-// the screen driver library : https://github.com/vindar/ILI9341_T4
-#ifndef RENDER_MANAGER
-#define RENDER_MANAGER
-#include "SerialServoController.h"
+#ifndef COMMUNICATION_MANAGER
+#define COMMUNICATION_MANAGER
+#include <Arduino.h>
+
+#define MOVE_SERVO_COMMAND 1
+#define READ_SERVO_COMMAND 2
 #define BUFF_SIZE 40
+
+class SerialServoController;
 class CommunicationManager{
     private:
         char inputBuffer[BUFF_SIZE];
@@ -10,7 +14,6 @@ class CommunicationManager{
         const char endMarker = '>';
         byte bytesRecvd = 0;
         boolean readInProgress = false;
-        boolean newDataFromPC = false;
         SerialServoController* servoController;
 
 char messageFromPC[BUFF_SIZE] = {0};

@@ -1,4 +1,5 @@
 #include "SerialServoController.h"
+#include "CommunicationManager.h"
 SerialServoController::SerialServoController(){
 	
 }

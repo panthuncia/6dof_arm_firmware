@@ -1,5 +1,9 @@
-#include "CommunicationManager.h"
 #include <Arduino.h>
+#include "CommunicationManager.h"
+#include "SerialServoController.h"
+CommunicationManager::CommunicationManager(){
+
+}
 void CommunicationManager::begin(){
   Serial.print("<Arm ready!>");
 }
