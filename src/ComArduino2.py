@@ -95,7 +95,7 @@ def waitForArduino():
     global startMarker, endMarker
 
     msg = b''
-    while msg.find(bytes("Arduino is ready", encoding='utf8')) == -1:
+    while msg.find(bytes("Arm ready!", encoding='utf8')) == -1:
 
         while ser.inWaiting() == 0:
             pass
@@ -151,8 +151,8 @@ print("")
 print("")
 
 # NOTE the user must ensure that the serial port and baudrate are correct
-serPort = "COM12"
-baudRate = 57600
+serPort = "COM14"
+baudRate = 9600
 ser = serial.Serial(serPort, baudRate)
 print("Serial port " + serPort + " opened  Baudrate " + str(baudRate))
 
@@ -162,20 +162,12 @@ endMarker = 62
 waitForArduino()
 
 print("Finished waiting")
-testData1 = "<270,270,270,270,270,270>"
-testData2 = "<180,180,180,180,180,180>"
-testData3 = "<70,70,70,70,70,70>"
-testData4 = "<0,0,0,0,0,0>"
+testData1 = "<10, 10, 90, 90, -90, 90>"
 n = 1;
 while True:
     if n == 1:
         runTest(testData1)
-    if n == 2:
-        runTest(testData2)
-    if n == 3:
-        runTest(testData3)
-    if n == 4:
-        runTest(testData4)
-    n += 1
+        time.sleep(2)
+
 
 ser.close

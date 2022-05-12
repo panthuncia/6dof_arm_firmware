@@ -10,7 +10,7 @@ class CommunicationManager;
 class SerialServoController{
     private:
         LX16ABus servoBus;
-        LX16AServo** servos;
+        LX16AServo* servos[6];
         CommunicationManager* comms;
     public:
         Positions latestPositions;

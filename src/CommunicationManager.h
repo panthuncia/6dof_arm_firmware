@@ -2,8 +2,8 @@
 #define COMMUNICATION_MANAGER
 #include <Arduino.h>
 
-#define MOVE_SERVO_COMMAND 1
-#define READ_SERVO_COMMAND 2
+#define WRITE_SERVO_COMMAND 0
+#define READ_SERVO_COMMAND 1
 #define BUFF_SIZE 40
 
 class SerialServoController;
