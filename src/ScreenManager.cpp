@@ -1,15 +1,14 @@
 #include "ScreenManager.h"
-
-Adafruit_RA8875 ScreenManager::tft = Adafruit_RA8875(RA8875_CS, RA8875_RESET);
+ParallelRA8875 ScreenManager::tft = ParallelRA8875(true, RA8875_CS, RA8875_RESET);
 uint16_t ScreenManager::tx, ScreenManager::ty;
 struct _ts_event ScreenManager::ts_event;
+struct _ts_event ScreenManager::empty_ts_event;
 uint16_t ScreenManager::total = 256;
 float ScreenManager::xScale = 1024.0F / SCREEN_WIDTH;
 float ScreenManager::yScale = 1024.0F / SCREEN_HEIGHT;
 uint8_t ScreenManager::ss[4];
-
-ScreenManager::ScreenManager(){
-    
+extern uint16_t fb[SCREEN_HEIGHT / SCALE_FACTOR * SCREEN_WIDTH / SCALE_FACTOR];
+ScreenManager::ScreenManager() {
 }
 
 void ScreenManager::GSLX680_I2C_Write(uint8_t regAddr, uint8_t *val, uint16_t cnt) {
@@ -86,6 +85,7 @@ void ScreenManager::_GSLX680_reset_chip(void) {
     delay(1);
 }
 
+#ifdef REFLASH_FIRMWARE
 void ScreenManager::_GSLX680_load_fw(void) {
     uint8_t regAddr;
     uint8_t Wrbuf[4] = {0x00};
@@ -101,6 +101,7 @@ void ScreenManager::_GSLX680_load_fw(void) {
         GSLX680_I2C_Write(regAddr, Wrbuf, 4);
     }
 }
+#endif
 
 void ScreenManager::_GSLX680_startup_chip(void) {
     uint8_t Wrbuf[4] = {0x00};
@@ -120,10 +121,10 @@ void ScreenManager::check_mem_data(void) {
     if ((read_buf[3] != 0x5a) & (read_buf[2] != 0x5a) & (read_buf[1] != 0x5a) & (read_buf[0] != 0x5a)) {
         Serial.println("init failure,Reinitialize");
         // Serial.println("#########check mem read 0xb0 = %x %x %x %x #########\n", read_buf[3], read_buf[2], read_buf[1], read_buf[0]);
-        tft.textSetCursor(0, 16);
-        tft.textColor(RA8875_RED, RA8875_BLACK);
-        tft.textEnlarge(0);
-        tft.textWrite("CTP initialization failure  Reinitialize.");
+        // tft.setCursor(0, 16);
+        // tft.setTextColor(RA8875_RED, RA8875_BLACK);
+        // tft.setFontScale(0);
+        // tft.print("CTP initialization failure  Reinitialize.");
         digitalWrite(GSL1680_WAKE, LOW);
         delay(20);
         digitalWrite(GSL1680_WAKE, HIGH);
@@ -131,26 +132,25 @@ void ScreenManager::check_mem_data(void) {
         // test_i2c();
         _GSLX680_clr_reg();
         _GSLX680_reset_chip();
+#ifdef REFLASH_FIRMWARE
         _GSLX680_load_fw();
+#endif
         _GSLX680_startup_chip();
-        //_GSLX680_reset_chip();
-        //_GSLX680_startup_chip();
 
         if ((read_buf[3] != 0x5a) & (read_buf[2] != 0x5a) & (read_buf[1] != 0x5a) & (read_buf[0] != 0x5a)) {
-            tft.textSetCursor(0, 16);
-            tft.textColor(RA8875_RED, RA8875_BLACK);
-            tft.textEnlarge(0);
-            tft.textWrite("CTP initialization failure  Reinitialize.");
-            while (1)
-                ;
+            // tft.setCursor(0, 16);
+            // tft.setTextColor(RA8875_RED, RA8875_BLACK);
+            // tft.setFontScale(0);
+            while (1){
+                Serial.println("CTP initialization failure  Reinitialize.");
+            };
         }
 
     } else {
-        tft.textMode();
-        tft.textColor(RA8875_RED, RA8875_BLACK);
-        tft.textSetCursor(0, 16);
-        tft.textEnlarge(0);
-        tft.textWrite("CTP initialization OK.");
+        // tft.setTextColor(RA8875_RED, RA8875_BLACK);
+        // tft.setCursor(0, 16);
+        // tft.setFontScale(0);
+        // tft.print("CTP initialization OK.");
         Serial.println("init done");
     }
 }
@@ -188,6 +188,11 @@ void ScreenManager::inttostr(uint16_t value, uint8_t *str) {
     str[3] = value % 1000 % 100 % 10 + 0x30;
 }
 
+uint16_t ScreenManager::getElement(unsigned int x, unsigned int y) {
+    // Do some error tests
+    return ((uint16_t *)fb)[y * SCREEN_HEIGHT / SCALE_FACTOR + SCREEN_WIDTH - x];
+}
+
 void ScreenManager::begin() {
     pinMode(5, OUTPUT);
     digitalWrite(5, HIGH);
@@ -196,23 +201,17 @@ void ScreenManager::begin() {
     Serial.println("RA8875 start");
     Wire.begin();  // join i2c bus (address optional for master)
 
-    while (!tft.begin(RA8875_800x480)) {
-        Serial.println("RA8875 Not Found!");
-        delay(100);
-    }
+    // tft.begin(RA8875_800x480);
+    tft.begin();
     Serial.println("Found RA8875");
 
-    tft.displayOn(true);
-    tft.GPIOX(true);                               // Enable TFT - display enable tied to GPIOX
-    tft.PWM1config(true, RA8875_PWM_CLK_DIV1024);  // PWM output for backlight
-    tft.PWM1out(255);
+    //tft.GPIOX(true);  // Enable TFT - display enable tied to GPIOX
 
-    tft.fillScreen(RA8875_BLACK);
-    tft.textMode();
-    tft.textSetCursor(0, 0);
-    tft.textColor(RA8875_RED, RA8875_BLACK);
-    tft.textEnlarge(0);
-    tft.textWrite("Buydisplay.com     Please wait CTP initialization..............");
+    // tft.fillWindow(RA8875_BLACK);
+    // tft.setCursor(0, 0);
+    // tft.setTextColor(RA8875_RED, RA8875_BLACK);
+    // tft.setFontScale(0);
+    // tft.print("Please wait CTP initialization..............");
 
     pinMode(GSL1680_INT, INPUT);
     pinMode(GSL1680_WAKE, OUTPUT);
@@ -227,94 +226,32 @@ void ScreenManager::begin() {
     _GSLX680_clr_reg();
     Serial.println("reset_chip");
     _GSLX680_reset_chip();
+#ifdef REFLASH_FIRMWARE
     Serial.println("load_fw");
-    _GSLX680_load_fw();
+    //_GSLX680_load_fw();
+#endif
     Serial.println("startup_chip");
     _GSLX680_startup_chip();
-    //_GSLX680_reset_chip();
-    //_GSLX680_startup_chip();
     delay(50);
-    check_mem_data();
+    //check_mem_data();
     delay(100);
-    tft.fillScreen(RA8875_BLACK);
-    tft.textMode();
-    tft.textSetCursor(0, 0);
-    tft.textColor(RA8875_RED, RA8875_BLACK);
-    tft.textEnlarge(0);
-    tft.textWrite("Capacitive touch screen test.");
-    tft.textSetCursor(SCREEN_WIDTH - 40, 0);
-    tft.textWrite("CLEAR");
+}
+
+void ScreenManager::readTouchData() {
+    if (digitalRead(GSL1680_INT) == HIGH) {
+        GSLX680_read_data();
+    }
 }
 
 void ScreenManager::loop() {
-    if (digitalRead(GSL1680_INT) == HIGH) {
-        GSLX680_read_data();
-
-        tft.graphicsMode();
-        if (ts_event.fingers == 1) {
-            tft.fillCircle(ts_event.x1, ts_event.y1, 5, RA8875_RED);
-        }
-        if (ts_event.fingers == 2) {
-            tft.fillCircle(ts_event.x1, ts_event.y1, 5, RA8875_RED);
-            tft.fillCircle(ts_event.x2, ts_event.y2, 5, RA8875_GREEN);
-        }
-        if (ts_event.fingers == 3) {
-            tft.fillCircle(ts_event.x1, ts_event.y1, 5, RA8875_RED);
-            tft.fillCircle(ts_event.x2, ts_event.y2, 5, RA8875_GREEN);
-            tft.fillCircle(ts_event.x3, ts_event.y3, 5, RA8875_BLUE);
-        }
-        if (ts_event.fingers == 4) {
-            tft.fillCircle(ts_event.x1, ts_event.y1, 5, RA8875_RED);
-            tft.fillCircle(ts_event.x2, ts_event.y2, 5, RA8875_GREEN);
-            tft.fillCircle(ts_event.x3, ts_event.y3, 5, RA8875_BLUE);
-            tft.fillCircle(ts_event.x4, ts_event.y4, 5, RA8875_CYAN);
-        }
-        if (ts_event.fingers == 5) {
-            tft.fillCircle(ts_event.x1, ts_event.y1, 5, RA8875_RED);
-            tft.fillCircle(ts_event.x2, ts_event.y2, 5, RA8875_GREEN);
-            tft.fillCircle(ts_event.x3, ts_event.y3, 5, RA8875_BLUE);
-            tft.fillCircle(ts_event.x4, ts_event.y4, 5, RA8875_CYAN);
-            tft.fillCircle(ts_event.x5, ts_event.y5, 5, RA8875_MAGENTA);
-        }
-
-        if (ts_event.x1 >= 760 && (ts_event.y1 & 0x0fff) <= 30) {
-            tft.fillScreen(RA8875_BLACK);
-            tft.textMode();
-            tft.textSetCursor(0, 0);
-            tft.textColor(RA8875_RED, RA8875_BLACK);
-            tft.textEnlarge(0);
-            tft.textWrite("Capacitive touch screen test.");
-            tft.textSetCursor(SCREEN_WIDTH - 40, 0);
-            tft.textWrite("CLEAR");
-        }
-
-        inttostr(ts_event.x1 & 0x0fff, ss);
-
-        tft.textMode();
-        tft.textSetCursor(100, 80);
-        tft.textColor(RA8875_RED, RA8875_BLACK);
-        tft.textWrite("X =  ");
-        tft.textSetCursor(140, 80);
-        tft.writeCommand(RA8875_MRWC);
-        tft.writeData(ss[0]);
-        delay(1);
-        tft.writeData(ss[1]);
-        delay(1);
-        tft.writeData(ss[2]);
-        delay(1);
-        tft.writeData(ss[3]);
-
-        inttostr(ts_event.y1 & 0x0fff, ss);
-        tft.textSetCursor(100, 140);
-        tft.textWrite("Y =  ");
-        tft.textSetCursor(140, 140);
-        tft.writeCommand(RA8875_MRWC);
-        tft.writeData(ss[0]);
-        delay(1);
-        tft.writeData(ss[1]);
-        delay(1);
-        tft.writeData(ss[2]);
-        delay(1);
-        tft.writeData(ss[3]);
-    }
+			//full display test
+            Serial.println("Running display test");
+            //GPIO6_DR = (GPIO6_DR & LOW_BYTES) | (((uint16_t)0x5555) << 16);
+            //tft.GPIO6DigitalWrite(0x5555);
+            // Serial.print("DR: ");
+            // Serial.println(GPIO6_DR);
+            // Serial.print("PSR: ");
+            // Serial.println(GPIO6_PSR);
+            
+			tft.Test();
 }

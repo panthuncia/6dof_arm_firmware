@@ -3,8 +3,8 @@
 #include "CommunicationManager.h"
 SerialServoController::SerialServoController() {
 }
-void SerialServoController::begin(int* servoStartPos, int* servoStartAngles, int* minAnglesCentDegrees, int* maxAnglesCentDegrees) {
-    servoBus.begin(&Serial2, 8,  // on TX pin 1
+void SerialServoController::begin(int* servoStartPos, int* servoStartAngles, int* minAnglesCentDegrees, int* maxAnglesCentDegrees, HardwareSerial* serial) {
+    servoBus.begin(serial, 8,  // on TX pin 1
                    2);           // use pin 2 as the TX flag for buffer
     servoBus.retry = 1;          // enforce synchronous real time
     servoBus.debug(true);
@@ -18,21 +18,21 @@ void SerialServoController::loop() {
     for (int i = 0; i < 6; i++) {
         latestPositions.positions[i] = servos[i]->pos_read();
     }
-	long start = millis();
+	// long start = millis();
     if (comms->newDataFromPC) {
         for (int i = 0; i < 6; i++) {
-            Serial.print("Moving servo to");
+            Serial.print("Moving servo to ");
 			Serial.println(comms->lastCommand[i]);
             servos[i]->move_time_and_wait_for_sync(comms->lastCommand[i], SERVO_TIME_PARAM);
         }
 		servoBus.move_sync_start();
-		long took = millis() - start;
-		long time = (SERVO_TIME_PARAM) - took;
-		if (time > 0)
-			delay(time);
-		else {
-			Serial.println("Real Time broken, took: " + String(took));
-		}
+		// long took = millis() - start;
+		// long time = (SERVO_TIME_PARAM) - took;
+		// if (time > 0)
+		// 	delay(time);
+		// else {
+		// 	Serial.println("Real Time broken, took: " + String(took));
+		// }
         comms->newDataFromPC = false;
     }
 }

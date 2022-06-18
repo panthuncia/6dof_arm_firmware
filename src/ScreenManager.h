@@ -5,17 +5,16 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <stdint.h>
+#include <ParallelRA8875.h>
 #include "Adafruit_GFX.h"
-#include "Adafruit_RA8875.h"
+#include "Screen_Info.h"
 
 #define RA8875_INT 4 //RA8875 interrupt pin
 #define RA8875_CS 10 //RA8875 cs pin
 #define RA8875_RESET 9 //RA8875 reset pin
-#define GSL1680_WAKE 6 //GSL1680 wake pin
-#define GSL1680_INT 7 //GSL1680 interrupt pin
+#define GSL1680_WAKE 8 //GSL1680 wake pin
+#define GSL1680_INT 11 //GSL1680 interrupt pin
 #define GSL1680_I2C_ADDRESS 0x40  //GSL1680 is always at I2C address 0x40
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 480
 
 struct _ts_event {
         uint16_t x1;
@@ -28,7 +27,7 @@ struct _ts_event {
         uint16_t y4;
         uint16_t x5;
         uint16_t y5;
-        uint8_t fingers;
+        uint8_t fingers=0;
     };
 
 class ScreenManager{
@@ -36,13 +35,15 @@ class ScreenManager{
     ScreenManager();
     static void begin(void);
     void loop(void);
+    void readTouchData(void);
  private:
     uint8_t addr = 0x40;
     static uint16_t tx, ty;
     static struct _ts_event ts_event;
+    static struct _ts_event empty_ts_event;
     // LCD:hardware SPI  CTP:hardware I2C
     // Teensy 4.1 + ER-AS8875 + ER-TFTM050A2-3
-    static Adafruit_RA8875 tft;
+    static ParallelRA8875 tft;
     static uint16_t total;
     static float xScale;
     static float yScale;
@@ -53,10 +54,13 @@ class ScreenManager{
     static uint8_t GSLX680_read_data(void);
     static void _GSLX680_clr_reg(void);
     static void _GSLX680_reset_chip(void);
+    #ifdef REFLASH_FIRMWARE
     static void _GSLX680_load_fw(void);
+    #endif
     static void _GSLX680_startup_chip(void);
     static void check_mem_data(void);
     static void inttostr(uint16_t value, uint8_t *str);
+    uint16_t ScreenManager::getElement(unsigned int x, unsigned int y);
 };
 
 

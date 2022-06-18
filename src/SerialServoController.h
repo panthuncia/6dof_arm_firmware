@@ -15,7 +15,7 @@ class SerialServoController{
     public:
         Positions latestPositions;
         SerialServoController();
-        void begin(int* servoStartPos, int* servoStartAngles, int* minAnglesCentDegrees, int* maxAnglesCentDegrees);
+        void begin(int* servoStartPos, int* servoStartAngles, int* minAnglesCentDegrees, int* maxAnglesCentDegrees, HardwareSerial* serial);
         void loop();
         void registerComms(CommunicationManager* com);
 };

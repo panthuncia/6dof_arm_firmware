@@ -1,0 +1,3 @@
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 480
+#define SCALE_FACTOR 3

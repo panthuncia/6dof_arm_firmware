@@ -1,3 +1,5 @@
+#define REFLASH_FIRMWARE
+#ifdef REFLASH_FIRMWARE
 #include <Arduino.h>
 struct fw_data {
     uint8_t offset;
@@ -4331,3 +4333,4 @@ const struct fw_data GSLX680_FW[] PROGMEM = {
     {0x78, 0x31383a31},
     {0x7c, 0x393a3338},
 };
+#endif
