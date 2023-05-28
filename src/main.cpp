@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "SerialServoController.h"
 #include "CommunicationManager.h"
-#include "ScreenManager.h"
 #define SERVO_1_ZERO_POS 517
 #define SERVO_2_ZERO_POS 535
 #define SERVO_3_ZERO_POS 96
@@ -23,7 +22,6 @@
 #define SERVO_6_MAX_CENTIDEGREES 10000
 SerialServoController servoController;
 CommunicationManager communicationManager;
-ScreenManager ScreenManager;
 void setup(){
 	Serial.begin(9600);
 	Serial.println("Starting...");
@@ -32,17 +30,15 @@ void setup(){
 	int minAnglesCentDegrees[6]={SERVO_1_MIN_CENTIDEGREES, SERVO_2_MIN_CENTIDEGREES, SERVO_3_MIN_CENTIDEGREES, SERVO_4_MIN_CENTIDEGREES, SERVO_5_MIN_CENTIDEGREES, SERVO_6_MIN_CENTIDEGREES};
 	int maxAnglesCentDegrees[6]={SERVO_1_MAX_CENTIDEGREES, SERVO_2_MAX_CENTIDEGREES, SERVO_3_MAX_CENTIDEGREES, SERVO_4_MAX_CENTIDEGREES, SERVO_5_MAX_CENTIDEGREES, SERVO_6_MAX_CENTIDEGREES};
 	servoController.registerComms(&communicationManager);
-	//servoController.begin(servoStartPos, servoStartAngles, minAnglesCentDegrees, maxAnglesCentDegrees);
+	servoController.begin(servoStartPos, servoStartAngles, minAnglesCentDegrees, maxAnglesCentDegrees);
 	communicationManager.registerServoController(&servoController);
-	//communicationManager.begin();
-	ScreenManager.begin();
+	communicationManager.begin();
 	
 	Serial.println("Setup done!");
 }
 
 void loop(){
 	Serial.println("looping!");
-	//communicationManager.loop();
-	//servoController.loop();
-	ScreenManager.loop();
+	communicationManager.loop();
+	servoController.loop();
 }
