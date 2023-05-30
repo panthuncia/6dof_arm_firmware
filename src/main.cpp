@@ -38,7 +38,7 @@ void setup(){
 }
 
 void loop(){
-	Serial.println("looping!");
+	//Serial.println("looping!");
 	communicationManager.loop();
 	servoController.loop();
 }

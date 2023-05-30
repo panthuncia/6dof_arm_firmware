@@ -10,23 +10,46 @@ void CommunicationManager::begin() {
 }
 void CommunicationManager::loop() {
     getDataFromPC();
+    parseData();
 }
 void CommunicationManager::getDataFromPC() {
     // receive data from PC and save it into inputBuffer
-    if (Serial.available() > 0) {
-        char x = (char)Serial.read();
+    bool isFirstByte = false;
+    char* currentInputBuffer = moveCommandBuffer;
+    byte bytesRecvd = 0;
+    boolean readInProgress = false;
+    int commandsRead = 0;
+    while (usb_serial_available() > 0) {
+        char x = (char)usb_serial_getchar();
         // the order of these IF clauses is significant
         if (x == endMarker) {
             readInProgress = false;
-            inputBuffer[bytesRecvd] = 0;
-            parseData();
+            currentInputBuffer[bytesRecvd] = ',';
+            //Serial.print("<Received end byte>");
+            commandsRead+=1;
+            //loop after 100 commands
+            if(commandsRead>99)
+                break;
         }
 
         if (readInProgress) {
-            inputBuffer[bytesRecvd] = x;
-            // Serial.print("<Received byte: ");
-            // Serial.print(x);
-            // Serial.print(">");
+            if(isFirstByte){
+                isFirstByte = false;
+                //Serial.println("Got first byte");
+                //Serial.println(x);
+                if(x=='0'){
+                    //Serial.println("was move command");
+                    currentInputBuffer = moveCommandBuffer;
+                    processMoveCommand = true;
+                }
+                else if (x=='1'){
+                    processPrintCommand = true;
+                    currentInputBuffer = printCommandBuffer;
+                }
+            }
+            currentInputBuffer[bytesRecvd] = x;
+            //Serial.print("Received byte: ");
+            //Serial.println(x);
             bytesRecvd++;
             if (bytesRecvd == BUFF_SIZE) {
                 bytesRecvd = BUFF_SIZE - 1;
@@ -34,48 +57,57 @@ void CommunicationManager::getDataFromPC() {
         }
 
         if (x == startMarker) {
+            
             bytesRecvd = 0;
             readInProgress = true;
-            // Serial.print("<Received start byte>");
+            isFirstByte = true;
+            //Serial.print("<Received start byte>");
         }
     }
 }
 void CommunicationManager::parseData() {
     // split the data into its parts
-    char* strtokIndx;  // this is used by strtok() as an index
+    if(processMoveCommand){
+        //Serial.println("In process move command");
+        processMoveCommand = false;
+        char* inputBuffer = moveCommandBuffer;
+        char* strtokIndx;  // this is used by strtok() as an index
+        strtokIndx = strtok(inputBuffer, ",");  // get the first part - the string
+        uint8_t command = atoi(strtokIndx);
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[0] = atoi(strtokIndx);
 
-    strtokIndx = strtok(inputBuffer, ",");  // get the first part - the string
-    uint8_t command = atoi(strtokIndx);     // convert this part to centidegrees
-    switch (command) {
-        case WRITE_SERVO_COMMAND: {
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[0] = atof(strtokIndx) * 100;
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[1] = atoi(strtokIndx);
 
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[1] = atof(strtokIndx) * 100;
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[2] = atoi(strtokIndx);
 
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[2] = atof(strtokIndx) * 100;
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[3] = atoi(strtokIndx);
 
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[3] = atof(strtokIndx) * 100;
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[4] = atoi(strtokIndx);
 
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[4] = atof(strtokIndx) * 100;
+        strtokIndx = strtok(NULL, ",");
+        lastCommand[5] = atoi(strtokIndx);
 
-            strtokIndx = strtok(NULL, ",");
-            lastCommand[5] = atof(strtokIndx) * 100;
-
-            newDataFromPC = true;
-            break;
-        }
-        case READ_SERVO_COMMAND: {
-            Serial.print("<" + String(servoController->latestPositions.positions[0]) + "," + 
-                String(servoController->latestPositions.positions[1]) + "," + String(servoController->latestPositions.positions[2]) 
-                + "," + String(servoController->latestPositions.positions[3]) + "," + String(servoController->latestPositions.positions[4])
-                + "," + String(servoController->latestPositions.positions[5]) + ">");
-            break;
-        }
+        newDataFromPC = true;
+        // Serial.print("lastCommand: ");
+        // Serial.print(lastCommand[0]);
+        // Serial.print(lastCommand[1]);
+        // Serial.print(lastCommand[2]);
+        // Serial.print(lastCommand[3]);
+        // Serial.print(lastCommand[4]);
+        // Serial.print(lastCommand[5]);
+        // Serial.println("");
+    }
+    if (processPrintCommand){           
+        processPrintCommand = false; 
+        Serial.println("<1," + String(servoController->latestPositions.positions[0]) + "," + 
+            String(servoController->latestPositions.positions[1]) + "," + String(servoController->latestPositions.positions[2]) 
+            + "," + String(servoController->latestPositions.positions[3]) + "," + String(servoController->latestPositions.positions[4])
+            + "," + String(servoController->latestPositions.positions[5]) + ">");
     }
 }
 

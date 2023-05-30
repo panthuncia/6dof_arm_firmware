@@ -9,11 +9,12 @@
 class SerialServoController;
 class CommunicationManager{
     private:
-        char inputBuffer[BUFF_SIZE];
+        bool processMoveCommand = false;
+        bool processPrintCommand = false;
+        char moveCommandBuffer[BUFF_SIZE];
+        char printCommandBuffer[BUFF_SIZE];
         const char startMarker = '<';
         const char endMarker = '>';
-        byte bytesRecvd = 0;
-        boolean readInProgress = false;
         SerialServoController* servoController;
 
 char messageFromPC[BUFF_SIZE] = {0};
