@@ -1,24 +1,47 @@
+########
+#TEENSY#
+########
+import serial.tools.list_ports
+ports = list(serial.tools.list_ports.comports())
+for p in ports:
+    if p.pid == 1155: #Teensy 4.1 PID
+        teensy_port = p
+    
+teensy = serial.Serial(port=teensy_port.device, baudrate=115200, timeout=0)
+
+
 #########
 #PARSING#
 #########
+import time
 import mido
 from typing import Union
 import numpy as np
+
 KEY_SPACING_MM = 23.5  # Width of a key in millimeters
 MIDDLE_C_NOTE = 60     # MIDI note number for Middle C
+MIDDLE_C_OFFSET_MM = 100 
+KEYBOARD_FORWARD_MM = 160
 MAX_OCTAVE_SPAN = 12   # Number of semitones in one octave
 MAX_SPEED_MM_PER_SEC = 500  # Maximum allowed speed of the arm in mm/s
 NOTE_OFF_HEIGHT = 50 
 PRESS_NOTE_TRAVEL_DURATION = 0.5
 LIFT_NOTE_TRAVEL_DURATION = 0.5
 
+JOINT_0_ZERO_OFFSET = -np.pi/2
+JOINT_0_DIRECTION = 1
+JOINT_1_ZERO_OFFSET = -np.pi+np.pi-6*(np.pi/180) # 6 degree offset for right-angle linkage
+JOINT_1_DIRECTION = 1
+JOINT_2_ZERO_OFFSET = -np.pi
+JOINT_2_DIRECTION = -1
+
 PIANO_TRACK_NUMBER = 0
 STRING_TRACK_NUMBER = 1
 
 STRING_APPROACH_OFFSET_SECONDS = 0.5
 PLUCK_SWING_OFFSET_SECONDS = 0.2
-STRING_PLUCK_X = 100 # m
-STRING_PLUCK_Y = -200
+STRING_PLUCK_X = 200 # m
+STRING_PLUCK_Y = 80
 STRING_PLUCK_Z = 100
 JOINT4_NEUTRAL_ANGLE = 0
 PLUCK_ANGLE = np.pi/4
@@ -205,7 +228,7 @@ def validate_and_compute_positions_piano(segments) -> Union[list[Position], list
             # One or two notes
             notes_sorted = sorted(notes)
             offsets = [note - MIDDLE_C_NOTE for note in notes_sorted]
-            positions_mm = [offset * KEY_SPACING_MM for offset in offsets]
+            positions_mm = [offset * KEY_SPACING_MM - MIDDLE_C_OFFSET_MM for offset in offsets]
             
             if len(notes) == 1:
                 position_mm = positions_mm[0]
@@ -491,7 +514,7 @@ def waypoints_to_joint_sets(waypoints : list[Waypoint]):
     result = []
     for waypoint in waypoints:
         joint_set = JointSet()
-        y = 100/1000
+        y = KEYBOARD_FORWARD_MM/1000
         if(waypoint.y_mm is not None):
             y = waypoint.y_mm/1000
         q1, q2, q3 = inverse_kinematics(waypoint.position_mm/1000, y, (waypoint.height_mm+200)/1000, L1, L2, L3, True)
@@ -500,7 +523,7 @@ def waypoints_to_joint_sets(waypoints : list[Waypoint]):
         else:
             q4 = waypoint.joint4_angle
             q5 = 0
-        joint_set.joint_positions = [q1, q2, q3, q4, q5]
+        joint_set.joint_positions = [(q1+JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION, (q2+JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION, (q3+JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION, q4, q5]
         joint_set.waypoint = waypoint
         result.append(joint_set)
 
@@ -600,9 +623,11 @@ def visualize_joint_sets(joint_sets):
     def update(frame):
         joint_set = joint_sets[frame]
         q1, q2, q3, q4, q5 = joint_set.joint_positions
-
-        O0, O1, O2, O3, O4, O5 = forward_kinematics(q1, q2, q3, q4, q5, L1, L2, L3, L4)
-        #O0, O1, O2, O3, O4, O5 = forward_kinematics(0, 0, 0, 0, 0, L1, L2, L3, L4)
+        q1a = (q1-JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION
+        q2a = (q2-JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION
+        q3a = (q3-JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION
+        O0, O1, O2, O3, O4, O5 = forward_kinematics(q1a, q2a, q3a, q4, q5, L1, L2, L3, L4)
+        #O0, O1, O2, O3, O4, O5 = forward_kinematics(0, np.pi, np.pi, 0, 0, L1, L2, L3, L4)
         # Update the arm segments
         arm_points = [(O0, O1), (O1, O2), (O2, O3), (O3, O4), (O4, O5)]
         for i, seg in enumerate(arm_points):
@@ -622,7 +647,98 @@ def print_errors(errors):
     else:
         print("All conditions satisfied.")
 
-def main(file_path):
+def write_to_arm(x):
+    teensy.write(bytes(x, 'utf-8'))
+
+def angles_to_str(angles):
+    cmd = "<0,"
+    for angle in angles:
+        cmd+=str(int(angle))
+        cmd+=","
+    cmd=cmd[:-1]
+    cmd+=",0>"
+    return cmd
+
+def get_pos():
+    write_to_arm("<1>")
+    time.sleep(0.05)
+    while not teensy.in_waiting > 0:
+        time.sleep(0.01)
+    while teensy.in_waiting>0:
+        data = teensy.readline()
+        data = (data.decode("utf-8"))
+        if(data != ""):
+            print(data)
+        if "<1" in data:
+            break
+
+    pos = data.replace("<1,", "").replace(">", "")
+    a = pos.split(",")
+    angles = [float(i) for i in a]
+    return angles
+
+def run_control(file_path):
+    mid = load_midi_file(file_path)
+    events = extract_note_events(mid)
+    joint_sets = []
+
+    # Process each instrument track in the MIDI
+    for eventList in events:
+        timeline = build_note_timeline(eventList)
+        segment = build_segments(timeline, mid.length)
+
+        # Determine which track we are processing
+        track_number = eventList[0]['track']
+        
+        if track_number == PIANO_TRACK_NUMBER:
+            # Compute piano positions and waypoints
+            trackPositions, errors = validate_and_compute_positions_piano(segment)
+            print_errors(errors)
+            trackWaypoints = build_piano_trajectory_from_positions(trackPositions)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+
+        elif track_number == STRING_TRACK_NUMBER:
+            # Compute string plucking waypoints
+            trackWaypoints, errors = validate_and_compute_waypoints_string(segment)
+            print_errors(errors)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+
+    fine_grained_joint_sets = generate_fine_grained_joint_sets(joint_sets, frequency=20)
+
+    # Get the arm's current position to start from
+    current_pos = get_pos()
+
+    # Start time reference
+    start_time = time.time()
+
+    # Iterate through each joint set and send it to the arm at the correct time
+    for js in fine_grained_joint_sets:
+        # Wait until it's time to send this waypoint
+        # js.waypoint.arrival_time is a relative time (in seconds) from start of track
+        # so we wait until current real time matches that offset from start_time.
+        target_time = start_time + js.waypoint.arrival_time
+        now = time.time()
+        sleep_time = target_time - now
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+        # Convert rad to centidegrees
+        angles_in_centi_deg = []
+        for angle_rad in js.joint_positions:
+            angle_deg = angle_rad * (180.0 / np.pi)
+            angle_centi_deg = angle_deg * 100
+            angles_in_centi_deg.append(angle_centi_deg)
+
+        print(f"Joint 1: {angles_in_centi_deg[1]}")
+
+
+        # Send angles to the arm
+        cmd = angles_to_str(angles_in_centi_deg)
+        write_to_arm(cmd)
+
+    print("Trajectory execution complete!")
+
+def run_sim(file_path):
     mid = load_midi_file(file_path)
     events = extract_note_events(mid)
     timelines = []
@@ -660,4 +776,4 @@ def main(file_path):
     visualize_joint_sets(fine_grained_joint_sets)
 
 if __name__ == "__main__":
-    main('valid_midi.mid')
+    run_control('valid_midi.mid')

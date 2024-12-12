@@ -20,7 +20,7 @@ void SerialServoController::loop() {
     }
 	long start = millis();
     if (comms->newDataFromPC) {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 3; i++) {
             //Serial.print("Moving servo to ");
 		    //Serial.println(comms->lastCommand[i]);
             servos[i]->move_time_and_wait_for_sync(comms->lastCommand[i], SERVO_TIME_PARAM);
