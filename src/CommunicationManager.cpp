@@ -17,8 +17,8 @@ void CommunicationManager::getDataFromPC() {
     bool isFirstByte = false;
     char* currentInputBuffer = moveCommandBuffer;
     int commandsRead = 0;
-    while (usb_serial_available() > 0) {
-        char x = (char)usb_serial_getchar();
+    while (Serial.available() > 0) {
+        char x = (char)Serial.read();
         // the order of these IF clauses is significant
         if (x == endMarker) {
             readInProgress = false;

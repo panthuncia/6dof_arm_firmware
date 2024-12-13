@@ -4,10 +4,10 @@
 SerialServoController::SerialServoController() {
 }
 void SerialServoController::begin(int* servoStartPos, int* servoStartAngles, int* minAnglesCentDegrees, int* maxAnglesCentDegrees) {
-    servoBus.begin(&Serial2, 8,  // on TX pin 1
+    servoBus.begin(&Serial1, PIN_SERIAL1_TX,  // on TX pin 1
                    2);           // use pin 2 as the TX flag for buffer
     servoBus.retry = 1;          // enforce synchronous real time
-    servoBus.debug(false);
+    servoBus.debug(true);
     for (uint8_t i = 0; i < 6; i++) {
         servos[i] = new LX16AServo(&servoBus, i);
         servos[i]->calibrate(servoStartPos[i], servoStartAngles[i], minAnglesCentDegrees[i], maxAnglesCentDegrees[i]);

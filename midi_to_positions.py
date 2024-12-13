@@ -4,7 +4,7 @@
 import serial.tools.list_ports
 ports = list(serial.tools.list_ports.comports())
 for p in ports:
-    if p.pid == 1155: #Teensy 4.1 PID
+    if p.pid == 32811: #Teensy 4.1 PID
         teensy_port = p
     
 teensy = serial.Serial(port=teensy_port.device, baudrate=115200, timeout=0)
@@ -45,6 +45,18 @@ STRING_PLUCK_Y = 80
 STRING_PLUCK_Z = 100
 JOINT4_NEUTRAL_ANGLE = 0
 PLUCK_ANGLE = np.pi/4
+
+BASE_GRIPPER_OFFSET = 9.91832
+gripper_positions_mm = {
+    0: 8.91832-BASE_GRIPPER_OFFSET,
+    1: 14.24466-BASE_GRIPPER_OFFSET,
+    2: 20.75243-BASE_GRIPPER_OFFSET,
+    3: 27.87341-BASE_GRIPPER_OFFSET,
+    4: 35.84750-BASE_GRIPPER_OFFSET,
+    5: 44.33232-BASE_GRIPPER_OFFSET,
+    6: 54.29257-BASE_GRIPPER_OFFSET,
+    7: 67.69806-BASE_GRIPPER_OFFSET
+}
 
 def load_midi_file(file_path):
     """Load the MIDI file."""
