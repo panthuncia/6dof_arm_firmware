@@ -30,10 +30,12 @@ LIFT_NOTE_TRAVEL_DURATION = 0.5
 
 JOINT_0_ZERO_OFFSET = -np.pi/2
 JOINT_0_DIRECTION = 1
-JOINT_1_ZERO_OFFSET = -np.pi+np.pi-6*(np.pi/180) # 6 degree offset for right-angle linkage
+JOINT_1_ZERO_OFFSET = -np.pi # 6 degree offset for right-angle linkage
 JOINT_1_DIRECTION = 1
-JOINT_2_ZERO_OFFSET = -np.pi
+JOINT_2_ZERO_OFFSET = -np.pi #+np.pi-6*(np.pi/180)
 JOINT_2_DIRECTION = -1
+JOINT_4_ZERO_OFFSET = np.pi/2
+JOINT_4_DIRECTION = -1
 
 PIANO_TRACK_NUMBER = 0
 STRING_TRACK_NUMBER = 1
@@ -44,7 +46,23 @@ STRING_PLUCK_X = 200 # m
 STRING_PLUCK_Y = 80
 STRING_PLUCK_Z = 100
 JOINT4_NEUTRAL_ANGLE = 0
-PLUCK_ANGLE = np.pi/4
+PLUCK_ANGLE = -np.pi/4
+
+gripper_angles_mm_deg = {
+    0:0,
+    25: -9.2215,
+    47: -19.903,
+    70:-29.8823,
+    94: -40.2586,
+    117: -51.071,
+    140: -64.2585,
+    163: -94.2687
+}
+
+def get_closest_gripper_value(input_dict, target):
+    closest_key = min(input_dict.keys(), key=lambda k: abs(k - target))
+    return input_dict[closest_key]
+
 
 def load_midi_file(file_path):
     """Load the MIDI file."""
@@ -266,19 +284,21 @@ def validate_and_compute_positions_piano(segments) -> Union[list[Position], list
     return positions, errors
 
 class Waypoint:
-    def __init__(self, position_mm, height_mm, travel_time, arrival_time, joint4_angle = None, y_mm = None):
+    def __init__(self, gripper_width_mm, position_mm, height_mm, travel_time, arrival_time, joint4_angle = None, y_mm = None):
         self.arrival_time = arrival_time
         self.position_mm = position_mm
         self.height_mm = height_mm
         self.travel_time = travel_time
         self.joint4_angle = joint4_angle
         self.y_mm = y_mm
+        self.gripper_angle = get_closest_gripper_value(gripper_angles_mm_deg, gripper_width_mm)*(np.pi/180)
 
     arrival_time = 0
     position_mm = 0
     height_mm = 0
     travel_time = 0
     joint4_angle = None
+    gripper_angle = 0
     y_mm = None
 
 def build_piano_trajectory_from_positions(positions: list[Position]):
@@ -288,12 +308,12 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
 
     # Helper function to append a waypoint, automatically computing travel_time
     # based on the previous waypoint's arrival_time.
-    def add_waypoint(position_mm, height_mm, arrival_time):
+    def add_waypoint(position_mm, height_mm, arrival_time, gripper_width_mm):
         if waypoints:
             travel_time = arrival_time - waypoints[-1].arrival_time
         else:
             travel_time = 0
-        waypoints.append(Waypoint(position_mm, height_mm, travel_time, arrival_time))
+        waypoints.append(Waypoint(gripper_width_mm, position_mm, height_mm, travel_time, arrival_time))
 
     # Start from the first position
     first_pos = positions[0]
@@ -302,13 +322,13 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
         # If the first position is a pressed note, start above the key before pressing
         start_time = first_pos.time - PRESS_NOTE_TRAVEL_DURATION
         # Add starting waypoint above the note
-        add_waypoint(first_pos.position_mm, NOTE_OFF_HEIGHT, start_time)
+        add_waypoint(first_pos.position_mm, NOTE_OFF_HEIGHT, start_time, first_pos.gripper_width_mm)
         # Now at the note time, press down
-        add_waypoint(first_pos.position_mm, 0.0, first_pos.time)
+        add_waypoint(first_pos.position_mm, 0.0, first_pos.time, first_pos.gripper_width_mm)
     else:
         # If the first position is not pressing a note, just start at that position/time
         # Start "from above"
-        add_waypoint(first_pos.position_mm, NOTE_OFF_HEIGHT, first_pos.time)
+        add_waypoint(first_pos.position_mm, NOTE_OFF_HEIGHT, first_pos.time, first_pos.gripper_width_mm)
 
     # Process subsequent positions
     for i in range(1, len(positions)):
@@ -318,7 +338,7 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
         if prev_pos.height_mm == 0 and curr_pos.height_mm != 0:
             # The previous position was a pressed note. Lift up after playing the note
             lift_time = prev_pos.time + LIFT_NOTE_TRAVEL_DURATION
-            add_waypoint(prev_pos.position_mm, NOTE_OFF_HEIGHT, lift_time)
+            add_waypoint(prev_pos.position_mm, NOTE_OFF_HEIGHT, lift_time, curr_pos.gripper_width_mm)
 
         # Move horizontally to the new position
         # Arrival time is the current position's time minus PRESS_NOTE_TRAVEL_DURATION if we need to press
@@ -326,9 +346,9 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
         if curr_pos.height_mm == 0:
             # We must arrive above the key before pressing it
             approach_time = curr_pos.time - PRESS_NOTE_TRAVEL_DURATION
-            add_waypoint(curr_pos.position_mm, NOTE_OFF_HEIGHT, approach_time)
+            add_waypoint(curr_pos.position_mm, NOTE_OFF_HEIGHT, approach_time, curr_pos.gripper_width_mm)
             # Press down at the note time
-            add_waypoint(curr_pos.position_mm, 0.0, curr_pos.time)
+            add_waypoint(curr_pos.position_mm, 0.0, curr_pos.time, curr_pos.gripper_width_mm)
         else:
             # Just arrive at the position at NOTE_OFF_HEIGHT at the given time
             #add_waypoint(curr_pos.position_mm, NOTE_OFF_HEIGHT, curr_pos.time)
@@ -337,7 +357,7 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
     # After the final position, if it was a pressed note, lift up
     if positions[-1].height_mm == 0:
         final_lift_time = positions[-1].time + LIFT_NOTE_TRAVEL_DURATION
-        add_waypoint(positions[-1].position_mm, NOTE_OFF_HEIGHT, final_lift_time)
+        add_waypoint(positions[-1].position_mm, NOTE_OFF_HEIGHT, final_lift_time, curr_pos.gripper_width_mm)
 
     return waypoints
 
@@ -365,7 +385,7 @@ def validate_and_compute_waypoints_string(segments: list[dict]) -> tuple[list[Wa
             travel_time = arrival_time - waypoints[-1].arrival_time
         else:
             travel_time = 0.0
-        waypoints.append(Waypoint(x_mm, z_mm, travel_time, arrival_time, joint4_angle, y_mm))
+        waypoints.append(Waypoint(0, x_mm, z_mm, travel_time, arrival_time, joint4_angle, y_mm))
     
     prev_time = None
     prev_x, prev_y, prev_z = None, None, None
@@ -523,7 +543,7 @@ def waypoints_to_joint_sets(waypoints : list[Waypoint]):
         else:
             q4 = waypoint.joint4_angle
             q5 = 0
-        joint_set.joint_positions = [(q1+JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION, (q2+JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION, (q3+JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION, q4, q5]
+        joint_set.joint_positions = [(q1+JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION, (q2+JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION, (q3+JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION, q4, (q5+JOINT_4_ZERO_OFFSET)*JOINT_4_DIRECTION, waypoint.gripper_angle]
         joint_set.waypoint = waypoint
         result.append(joint_set)
 
@@ -591,7 +611,7 @@ def generate_fine_grained_joint_sets(joint_sets, frequency=20):
                 qs.append(q)
             
             new_time = t_start + t
-            new_wp = Waypoint(0,0,0,new_time)  # Dummy Waypoint, we only need arrival_time
+            new_wp = Waypoint(0,0,0,0,new_time)  # Dummy Waypoint, we only need arrival_time
             # Set arrival_time properly
             new_wp.arrival_time = new_time
             js = JointSet()
@@ -729,7 +749,7 @@ def run_control(file_path):
             angle_centi_deg = angle_deg * 100
             angles_in_centi_deg.append(angle_centi_deg)
 
-        print(f"Joint 1: {angles_in_centi_deg[1]}")
+        print(f"Joint 5: {angles_in_centi_deg[5]}")
 
 
         # Send angles to the arm

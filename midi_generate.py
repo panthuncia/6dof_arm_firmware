@@ -8,7 +8,7 @@ def create_valid_midi(file_name):
     track = MidiTrack()
     string_track = MidiTrack()
     mid.tracks.append(track)
-    mid.tracks.append(string_track)
+    #mid.tracks.append(string_track)
     
     # Define the duration of notes and rest between them (in ticks)
     note_duration = 480  # One beat
@@ -19,8 +19,8 @@ def create_valid_midi(file_name):
     notes_sequence = [
         [60],          # Single note
         [62],          # Single note
-        [],
-        [],
+        #[],
+        #[],
         [64, 67],      # Note pair within one octave
         [65],          # Single note
         [67, 69],      # Note pair within one octave
@@ -59,23 +59,23 @@ def create_valid_midi(file_name):
             current_time_track_1 += time_between_notes
 
     # Generate notes for track 2
-    for notes in notes_2:
-        if notes:
-            # Add the time delay since the last note
-            string_track.append(Message('note_on', note=notes[0], velocity=64, time=current_time_track_2))
-            # Add additional notes with no time delay
-            for note in notes[1:]:
-                string_track.append(Message('note_on', note=note, velocity=64, time=0))
+    # for notes in notes_2:
+    #     if notes:
+    #         # Add the time delay since the last note
+    #         string_track.append(Message('note_on', note=notes[0], velocity=64, time=current_time_track_2))
+    #         # Add additional notes with no time delay
+    #         for note in notes[1:]:
+    #             string_track.append(Message('note_on', note=note, velocity=64, time=0))
             
-            # Note off events
-            for note in notes:
-                string_track.append(Message('note_off', note=note, velocity=64, time=note_duration if note == notes[0] else 0))
+    #         # Note off events
+    #         for note in notes:
+    #             string_track.append(Message('note_off', note=note, velocity=64, time=note_duration if note == notes[0] else 0))
             
-            # Update the running time for the next event
-            current_time_track_2 = rest_duration
-        else:
-            # If no notes, just add the rest duration
-            current_time_track_2 += time_between_notes
+    #         # Update the running time for the next event
+    #         current_time_track_2 = rest_duration
+    #     else:
+    #         # If no notes, just add the rest duration
+    #         current_time_track_2 += time_between_notes
     
     mid.save(file_name)
     print(f"Valid MIDI file '{file_name}' created.")
