@@ -20,13 +20,57 @@ import numpy as np
 
 KEY_SPACING_MM = 23.5  # Width of a key in millimeters
 MIDDLE_C_NOTE = 60     # MIDI note number for Middle C
-MIDDLE_C_OFFSET_MM = 100 
-KEYBOARD_FORWARD_MM = 160
+MIDDLE_C_OFFSET_MM = 420 
+KEYBOARD_FORWARD_MM = 170
+KEYBOARD_UP_MM = 100
 MAX_OCTAVE_SPAN = 12   # Number of semitones in one octave
 MAX_SPEED_MM_PER_SEC = 500  # Maximum allowed speed of the arm in mm/s
-NOTE_OFF_HEIGHT = 50 
-PRESS_NOTE_TRAVEL_DURATION = 0.5
-LIFT_NOTE_TRAVEL_DURATION = 0.5
+NOTE_OFF_HEIGHT = 70
+NOTE_ON_HEIGHT = 10
+PRESS_NOTE_TRAVEL_DURATION = 0.3
+LIFT_NOTE_TRAVEL_DURATION = 0.3
+
+WHITE_KEY_SPACING_MM = 23.5  # Typical white key width
+BLACK_KEY_OFFSET_MM = 11.75  # Offset of black key from adjacent white key
+NOTE_POSITIONS_MM = {  # Relative offsets from Middle C (note 60)
+    48: -7 * WHITE_KEY_SPACING_MM,
+    49: -7 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    50: -6 * WHITE_KEY_SPACING_MM,
+    51: -6 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    52: -5 * WHITE_KEY_SPACING_MM,
+    53: -4 * WHITE_KEY_SPACING_MM,
+    54: -4 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    55: -3 * WHITE_KEY_SPACING_MM,
+    56: -3 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    57: -2 * WHITE_KEY_SPACING_MM,
+    58: -2 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    59: -1 * WHITE_KEY_SPACING_MM,
+    60: 0.0,   # Middle C
+    61: BLACK_KEY_OFFSET_MM,
+    62: WHITE_KEY_SPACING_MM,
+    63: WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    64: 2 * WHITE_KEY_SPACING_MM,
+    65: 3 * WHITE_KEY_SPACING_MM,
+    66: 3 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    67: 4 * WHITE_KEY_SPACING_MM,
+    68: 4 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    69: 5 * WHITE_KEY_SPACING_MM,
+    70: 6 * WHITE_KEY_SPACING_MM,
+    71: 6 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    72: 7 * WHITE_KEY_SPACING_MM,  # Next C
+    73: 7 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    74: 8 * WHITE_KEY_SPACING_MM,
+    75: 8 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    76: 9 * WHITE_KEY_SPACING_MM,
+    77: 10 * WHITE_KEY_SPACING_MM,
+    78: 10 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    79: 11 * WHITE_KEY_SPACING_MM,
+    80: 11 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    81: 12 * WHITE_KEY_SPACING_MM,
+    82: 12 * WHITE_KEY_SPACING_MM + BLACK_KEY_OFFSET_MM,
+    83: 13 * WHITE_KEY_SPACING_MM,
+    84: 14 * WHITE_KEY_SPACING_MM
+}
 
 JOINT_0_ZERO_OFFSET = -np.pi/2
 JOINT_0_DIRECTION = 1
@@ -34,19 +78,34 @@ JOINT_1_ZERO_OFFSET = -np.pi # 6 degree offset for right-angle linkage
 JOINT_1_DIRECTION = 1
 JOINT_2_ZERO_OFFSET = -np.pi #+np.pi-6*(np.pi/180)
 JOINT_2_DIRECTION = -1
+JOINT_3_ZERO_OFFSET = -np.pi/16
 JOINT_4_ZERO_OFFSET = np.pi/2
 JOINT_4_DIRECTION = -1
 
 PIANO_TRACK_NUMBER = 0
 STRING_TRACK_NUMBER = 1
+DRUM_TRACK_NUMBER = 2
+CYMBAL_TRACK_NUMBER = 3
 
 STRING_APPROACH_OFFSET_SECONDS = 0.5
 PLUCK_SWING_OFFSET_SECONDS = 0.2
 STRING_PLUCK_X = 200 # m
 STRING_PLUCK_Y = 80
 STRING_PLUCK_Z = 100
-JOINT4_NEUTRAL_ANGLE = 0
-PLUCK_ANGLE = -np.pi/4
+
+DRUM_HIT_X = -200
+DRUM_HIT_Y = 0
+DRUM_HIT_Z = 100
+
+CYMBAL_HIT_X = 40
+CYMBAL_HIT_Y = 200
+CYMBAL_HIT_Z = 270
+
+JOINT4_NEUTRAL_ANGLE = -np.pi/4
+PLUCK_ANGLE = -np.pi/1.5
+
+JOINT4_CYMBAL_NEUTRAL_ANGLE = -np.pi/4
+CYMBAL_STRIKE_ANGLE = -np.pi/2
 
 gripper_angles_mm_deg = {
     0:0,
@@ -124,9 +183,13 @@ def extract_note_events(mid):
         return total_time
 
     # Process the sorted messages
-    for time_in_ticks, track_index, msg in messages:
+    for time_in_ticks, _, msg in messages:
         time_in_seconds = ticks_to_seconds(time_in_ticks)
-
+        track_index = PIANO_TRACK_NUMBER
+        if msg.type in ['note_on', 'note_off'] and msg.note == 36:
+            track_index = DRUM_TRACK_NUMBER
+        elif msg.type in ['note_on', 'note_off'] and msg.note == 49:
+            track_index = CYMBAL_TRACK_NUMBER
         # If the track changes, save the current events and start a new list
         if track_index != active_track:
             if current_events:
@@ -245,8 +308,7 @@ def validate_and_compute_positions_piano(segments) -> Union[list[Position], list
         else:
             # One or two notes
             notes_sorted = sorted(notes)
-            offsets = [note - MIDDLE_C_NOTE for note in notes_sorted]
-            positions_mm = [offset * KEY_SPACING_MM - MIDDLE_C_OFFSET_MM for offset in offsets]
+            positions_mm = [get_note_position_mm(note) for note in notes_sorted]
             
             if len(notes) == 1:
                 position_mm = positions_mm[0]
@@ -284,7 +346,7 @@ def validate_and_compute_positions_piano(segments) -> Union[list[Position], list
     return positions, errors
 
 class Waypoint:
-    def __init__(self, gripper_width_mm, position_mm, height_mm, travel_time, arrival_time, joint4_angle = None, y_mm = None):
+    def __init__(self, gripper_width_mm, position_mm, height_mm, travel_time, arrival_time, joint4_angle = None, y_mm = None, j5 = None):
         self.arrival_time = arrival_time
         self.position_mm = position_mm
         self.height_mm = height_mm
@@ -292,12 +354,14 @@ class Waypoint:
         self.joint4_angle = joint4_angle
         self.y_mm = y_mm
         self.gripper_angle = get_closest_gripper_value(gripper_angles_mm_deg, gripper_width_mm)*(np.pi/180)
+        self.joint5_angle = j5
 
     arrival_time = 0
     position_mm = 0
     height_mm = 0
     travel_time = 0
     joint4_angle = None
+    joint5_angle = None
     gripper_angle = 0
     y_mm = None
 
@@ -324,7 +388,7 @@ def build_piano_trajectory_from_positions(positions: list[Position]):
         # Add starting waypoint above the note
         add_waypoint(first_pos.position_mm, NOTE_OFF_HEIGHT, start_time, first_pos.gripper_width_mm)
         # Now at the note time, press down
-        add_waypoint(first_pos.position_mm, 0.0, first_pos.time, first_pos.gripper_width_mm)
+        add_waypoint(first_pos.position_mm, NOTE_ON_HEIGHT, first_pos.time, first_pos.gripper_width_mm)
     else:
         # If the first position is not pressing a note, just start at that position/time
         # Start "from above"
@@ -415,10 +479,6 @@ def validate_and_compute_waypoints_string(segments: list[dict]) -> tuple[list[Wa
         pluck_swing_time = start_time - PLUCK_SWING_OFFSET_SECONDS
         add_waypoint(pluck_swing_time, STRING_PLUCK_X, STRING_PLUCK_Y, STRING_PLUCK_Z, PLUCK_ANGLE)
         
-        # At start_time, the string is plucked.
-        # We can hold the position and angle steady at note_time.
-        add_waypoint(start_time, STRING_PLUCK_X, STRING_PLUCK_Y, STRING_PLUCK_Z, PLUCK_ANGLE)
-        
         # After plucking, lift the joint4 back up. May need to move back as well?
         release_time = start_time + 0.2 
         add_waypoint(release_time, STRING_PLUCK_X, STRING_PLUCK_Y, STRING_PLUCK_Z, JOINT4_NEUTRAL_ANGLE)
@@ -426,6 +486,110 @@ def validate_and_compute_waypoints_string(segments: list[dict]) -> tuple[list[Wa
         prev_time = start_time
         prev_x, prev_y, prev_z = STRING_PLUCK_X, STRING_PLUCK_Y, STRING_PLUCK_Z
         prev_angle = JOINT4_NEUTRAL_ANGLE
+    
+    return waypoints, errors
+
+def validate_and_compute_waypoints_drum(segments: list[dict]) -> tuple[list[Waypoint], list[str]]:
+    """
+    """
+    errors = []
+    waypoints = []
+    
+    # A helper to add waypoints and automatically compute travel time based on previous waypoint
+    def add_waypoint(arrival_time, x_mm, y_mm, z_mm, joint4_angle):
+        if waypoints:
+            travel_time = arrival_time - waypoints[-1].arrival_time
+        else:
+            travel_time = 0.0
+        waypoints.append(Waypoint(0, x_mm, z_mm, travel_time, arrival_time, joint4_angle, y_mm))
+    
+    prev_time = None
+    prev_x, prev_y, prev_z = None, None, None
+    prev_angle = JOINT4_NEUTRAL_ANGLE
+
+    for segment in segments:
+        start_time = segment['start_time']
+        notes = segment['notes']
+        
+        # Validate number of notes
+        if len(notes) > 1:
+            errors.append(f"More than one note played simultaneously at {start_time:.2f}s")
+            continue
+        
+        if len(notes) == 0:
+            # No note, do nothing
+            continue
+
+        # Exactly one note
+        # The note needs to be plucked at start_time.
+        
+        # Move to position above the string at (start_time - APPROACH_OFFSET)
+        approach_time = start_time - STRING_APPROACH_OFFSET_SECONDS
+        add_waypoint(approach_time, DRUM_HIT_X, DRUM_HIT_Y, DRUM_HIT_Z, JOINT4_NEUTRAL_ANGLE)
+        
+        # Swing joint4 down at (start_time - PLUCK_SWING_OFFSET)
+        pluck_swing_time = start_time - PLUCK_SWING_OFFSET_SECONDS
+        add_waypoint(pluck_swing_time, DRUM_HIT_X, DRUM_HIT_Y, DRUM_HIT_Z, PLUCK_ANGLE)
+        
+        # After plucking, lift the joint4 back up. May need to move back as well?
+        release_time = start_time + 0.2 
+        add_waypoint(release_time, DRUM_HIT_X, DRUM_HIT_Y, DRUM_HIT_Z, JOINT4_NEUTRAL_ANGLE)
+        
+        prev_time = start_time
+        prev_x, prev_y, prev_z = DRUM_HIT_X, DRUM_HIT_Y, DRUM_HIT_Z
+        prev_angle = JOINT4_NEUTRAL_ANGLE
+    
+    return waypoints, errors
+
+def validate_and_compute_waypoints_cymbal(segments: list[dict]) -> tuple[list[Waypoint], list[str]]:
+    """
+    """
+    errors = []
+    waypoints = []
+    
+    # A helper to add waypoints and automatically compute travel time based on previous waypoint
+    def add_waypoint(arrival_time, x_mm, y_mm, z_mm, joint4_angle, joint5_angle):
+        if waypoints:
+            travel_time = arrival_time - waypoints[-1].arrival_time
+        else:
+            travel_time = 0.0
+        waypoints.append(Waypoint(0, x_mm, z_mm, travel_time, arrival_time, joint4_angle, y_mm, joint5_angle))
+    
+    prev_time = None
+    prev_x, prev_y, prev_z = None, None, None
+    prev_angle = JOINT4_CYMBAL_NEUTRAL_ANGLE
+
+    for segment in segments:
+        start_time = segment['start_time']
+        notes = segment['notes']
+        
+        # Validate number of notes
+        if len(notes) > 1:
+            errors.append(f"More than one note played simultaneously at {start_time:.2f}s")
+            continue
+        
+        if len(notes) == 0:
+            # No note, do nothing
+            continue
+
+        # Exactly one note
+        # The note needs to be plucked at start_time.
+        
+        # Move to position above the string at (start_time - APPROACH_OFFSET)
+        approach_time = start_time - STRING_APPROACH_OFFSET_SECONDS
+        add_waypoint(approach_time, CYMBAL_HIT_X, CYMBAL_HIT_Y, CYMBAL_HIT_Z, JOINT4_CYMBAL_NEUTRAL_ANGLE, -np.pi/1.7)
+        
+        # Swing joint4 down at (start_time - PLUCK_SWING_OFFSET)
+        pluck_swing_time = start_time - PLUCK_SWING_OFFSET_SECONDS
+        add_waypoint(pluck_swing_time, CYMBAL_HIT_X, CYMBAL_HIT_Y, CYMBAL_HIT_Z, CYMBAL_STRIKE_ANGLE, -np.pi)
+        
+        # After plucking, lift the joint4 back up. May need to move back as well?
+        release_time = start_time + 0.2 
+        add_waypoint(release_time, CYMBAL_HIT_X, CYMBAL_HIT_Y, CYMBAL_HIT_Z, JOINT4_CYMBAL_NEUTRAL_ANGLE, -np.pi/1.7)
+        
+        prev_time = start_time
+        prev_x, prev_y, prev_z = CYMBAL_HIT_X, CYMBAL_HIT_Y, CYMBAL_HIT_Z
+        prev_angle = JOINT4_CYMBAL_NEUTRAL_ANGLE
     
     return waypoints, errors
 
@@ -537,13 +701,16 @@ def waypoints_to_joint_sets(waypoints : list[Waypoint]):
         y = KEYBOARD_FORWARD_MM/1000
         if(waypoint.y_mm is not None):
             y = waypoint.y_mm/1000
-        q1, q2, q3 = inverse_kinematics(waypoint.position_mm/1000, y, (waypoint.height_mm+200)/1000, L1, L2, L3, True)
+        q1, q2, q3 = inverse_kinematics(waypoint.position_mm/1000, y, (waypoint.height_mm+KEYBOARD_UP_MM)/1000, L1, L2, L3, True)
         if waypoint.joint4_angle == None: # some instruments have hardcoded angles for 4&5
             q4, q5 = compute_q4_q5(q1, q2, q3)
         else:
             q4 = waypoint.joint4_angle
-            q5 = 0
-        joint_set.joint_positions = [(q1+JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION, (q2+JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION, (q3+JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION, q4, (q5+JOINT_4_ZERO_OFFSET)*JOINT_4_DIRECTION, waypoint.gripper_angle]
+            if waypoint.joint5_angle != None:
+                q5 = waypoint.joint5_angle
+            else:
+                q5 = -np.pi/2
+        joint_set.joint_positions = [(q1+JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION, (q2+JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION, (q3+JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION, q4+JOINT_3_ZERO_OFFSET, (q5+JOINT_4_ZERO_OFFSET)*JOINT_4_DIRECTION, waypoint.gripper_angle]
         joint_set.waypoint = waypoint
         result.append(joint_set)
 
@@ -642,7 +809,7 @@ def visualize_joint_sets(joint_sets):
 
     def update(frame):
         joint_set = joint_sets[frame]
-        q1, q2, q3, q4, q5 = joint_set.joint_positions
+        q1, q2, q3, q4, q5, q6 = joint_set.joint_positions
         q1a = (q1-JOINT_0_ZERO_OFFSET)*JOINT_0_DIRECTION
         q2a = (q2-JOINT_1_ZERO_OFFSET)*JOINT_1_DIRECTION
         q3a = (q3-JOINT_2_ZERO_OFFSET)*JOINT_2_DIRECTION
@@ -700,7 +867,7 @@ def get_pos():
 def run_control(file_path):
     mid = load_midi_file(file_path)
     events = extract_note_events(mid)
-    joint_sets = []
+    joint_sets : list[JointSet]= []
 
     # Process each instrument track in the MIDI
     for eventList in events:
@@ -722,20 +889,48 @@ def run_control(file_path):
             trackWaypoints, errors = validate_and_compute_waypoints_string(segment)
             print_errors(errors)
             joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+        elif track_number == DRUM_TRACK_NUMBER:
+            trackWaypoints, errors = validate_and_compute_waypoints_drum(segment)
+            print_errors(errors)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+        elif track_number == CYMBAL_TRACK_NUMBER:
+            trackWaypoints, errors = validate_and_compute_waypoints_cymbal(segment)
+            print_errors(errors)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+
 
     fine_grained_joint_sets = generate_fine_grained_joint_sets(joint_sets, frequency=20)
+    for joint_set in fine_grained_joint_sets:
+        joint_set.waypoint.arrival_time+=2
 
     # Get the arm's current position to start from
-    current_pos = get_pos()
+    # Create a dummy JointSet for the current position
+    current_pos_angles = [0,0,0,-np.pi/2,0,0]
+    current_joint_set = JointSet()
+    current_joint_set.joint_positions = current_pos_angles
+    current_joint_set.waypoint = Waypoint(
+        gripper_width_mm=0, 
+        position_mm=0, 
+        height_mm=0, 
+        travel_time=0, 
+        arrival_time=0
+    )
+
+    # Generate interpolated motion to the first joint set
+    transition_joint_sets = generate_fine_grained_joint_sets(
+        [current_joint_set, fine_grained_joint_sets[0]], 
+        frequency=20
+    )
+
+    # Prepend the transition sets to the rest of the fine-grained joint sets
+    full_joint_sets = transition_joint_sets + fine_grained_joint_sets
 
     # Start time reference
     start_time = time.time()
 
-    # Iterate through each joint set and send it to the arm at the correct time
-    for js in fine_grained_joint_sets:
-        # Wait until it's time to send this waypoint
-        # js.waypoint.arrival_time is a relative time (in seconds) from start of track
-        # so we wait until current real time matches that offset from start_time.
+    # Execute transition joint sets
+    print("Moving to the start position...")
+    for js in transition_joint_sets:
         target_time = start_time + js.waypoint.arrival_time
         now = time.time()
         sleep_time = target_time - now
@@ -743,16 +938,25 @@ def run_control(file_path):
             time.sleep(sleep_time)
 
         # Convert rad to centidegrees
-        angles_in_centi_deg = []
-        for angle_rad in js.joint_positions:
-            angle_deg = angle_rad * (180.0 / np.pi)
-            angle_centi_deg = angle_deg * 100
-            angles_in_centi_deg.append(angle_centi_deg)
+        angles_in_centi_deg = [angle * (180.0 / np.pi) * 100 for angle in js.joint_positions]
+        cmd = angles_to_str(angles_in_centi_deg)
+        write_to_arm(cmd)
 
-        print(f"Joint 5: {angles_in_centi_deg[5]}")
+    delay_start = time.time()
+    print("Transition complete. Press Enter to continue...")
+    input()  # Pause for keyboard input
+    delay_time = time.time()-delay_start
 
+    # Execute the rest of the trajectory
+    for js in fine_grained_joint_sets:
+        target_time = start_time + js.waypoint.arrival_time + delay_time
+        now = time.time()
+        sleep_time = target_time - now
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
-        # Send angles to the arm
+        # Convert rad to centidegrees
+        angles_in_centi_deg = [angle * (180.0 / np.pi) * 100 for angle in js.joint_positions]
         cmd = angles_to_str(angles_in_centi_deg)
         write_to_arm(cmd)
 
@@ -761,39 +965,68 @@ def run_control(file_path):
 def run_sim(file_path):
     mid = load_midi_file(file_path)
     events = extract_note_events(mid)
-    timelines = []
-    segments = []
-    positions = []
-    waypoints = []
-    joint_sets = []
+    joint_sets : list[JointSet]= []
+
+    # Process each instrument track in the MIDI
     for eventList in events:
-        timelines.append(build_note_timeline(eventList))
-        segments.append(build_segments(timelines[-1], mid.length))
+        timeline = build_note_timeline(eventList)
+        segment = build_segments(timeline, mid.length)
+
+        # Determine which track we are processing
+        track_number = eventList[0]['track']
         
-        if eventList[0]['track'] == PIANO_TRACK_NUMBER:
-            trackPositions, errors = validate_and_compute_positions_piano(segments[-1])
+        if track_number == PIANO_TRACK_NUMBER:
+            # Compute piano positions and waypoints
+            trackPositions, errors = validate_and_compute_positions_piano(segment)
             print_errors(errors)
             trackWaypoints = build_piano_trajectory_from_positions(trackPositions)
             joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
-
-            #waypoints.extend(trackWaypoints)
-        elif eventList[0]['track'] == STRING_TRACK_NUMBER:
-            trackWaypoints, errors = validate_and_compute_waypoints_string(segments[-1])
+        elif track_number == STRING_TRACK_NUMBER:
+            # Compute string plucking waypoints
+            trackWaypoints, errors = validate_and_compute_waypoints_string(segment)
+            print_errors(errors)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+        elif track_number == DRUM_TRACK_NUMBER:
+            trackWaypoints, errors = validate_and_compute_waypoints_drum(segment)
+            print_errors(errors)
+            joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
+        elif track_number == CYMBAL_TRACK_NUMBER:
+            trackWaypoints, errors = validate_and_compute_waypoints_cymbal(segment)
             print_errors(errors)
             joint_sets.extend(waypoints_to_joint_sets(trackWaypoints))
 
-    
-    #joint_sets = waypoints_to_joint_sets(waypoints)
-    # Output errors
-    
-    # Output computed positions
-    print("\nComputed Positions and Gripper Widths:")
-    for pos in positions:
-        print(f"Time: {pos.time:.2f}s, Position: {pos.position_mm:.2f} mm X, {pos.height_mm:.2f} mm Z Gripper Width: {pos.gripper_width_mm:.2f} mm")
-
     fine_grained_joint_sets = generate_fine_grained_joint_sets(joint_sets, frequency=20)
 
-    visualize_joint_sets(fine_grained_joint_sets)
+    for joint_set in fine_grained_joint_sets:
+        joint_set.waypoint.arrival_time+=2
+
+    # Get the arm's current position to start from
+    # Create a dummy JointSet for the current position
+    #current_pos_angles = get_pos()
+    current_pos_angles = [0,0,0,-np.pi/2,0,0]
+    for i in range(len(current_pos_angles)):
+        current_pos_angles[i]/=100
+        current_pos_angles[i] = current_pos_angles[i]*(np.pi/180)
+    current_joint_set = JointSet()
+    current_joint_set.joint_positions = [angle * (np.pi / 180.0) for angle in current_pos_angles]  # Convert from degrees to radians
+    current_joint_set.waypoint = Waypoint(
+        gripper_width_mm=0, 
+        position_mm=0, 
+        height_mm=0, 
+        travel_time=0, 
+        arrival_time=0
+    )
+
+    # Generate interpolated motion to the first joint set
+    transition_joint_sets = generate_fine_grained_joint_sets(
+        [current_joint_set, fine_grained_joint_sets[0]], 
+        frequency=20
+    )
+
+    # Prepend the transition sets to the rest of the fine-grained joint sets
+    full_joint_sets = transition_joint_sets + fine_grained_joint_sets
+
+    visualize_joint_sets(full_joint_sets)
 
 if __name__ == "__main__":
-    run_control('valid_midi.mid')
+    run_sim('piano chords.mid')
